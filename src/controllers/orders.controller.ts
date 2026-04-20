@@ -43,7 +43,7 @@ export const listAllOrders = async (req: AuthRequest, res: Response) => {
 // ─── GET /orders/:id ──────────────────────────────────────────
 export const getOrder = async (req: AuthRequest, res: Response) => {
   try {
-    const result = await getOrderById(req.params.id, req.user!.userId)
+    const result = await getOrderById(String(req.params.id), req.user!.userId)
     return sendSuccess(res, result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Order not found'
