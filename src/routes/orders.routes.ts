@@ -1,22 +1,28 @@
 import { Router } from 'express'
-import { listOrders, listAllOrders, getOrder, placeOrder } from '../controllers/orders.controller'
+import {
+  listOrders, listAllOrders, getOrder,
+  placeOrder, patchStatus, cancelUserOrder,
+  updateUserShipping, getOrderShipping, getOrderStatusDetail,
+} from '../controllers/orders.controller'
 import { authenticate, requireAdmin } from '../middlewares/auth.middleware'
 
 const router = Router()
 
-// ทุก orders endpoint ต้อง login ก่อนเสมอ
 router.use(authenticate)
 
-// GET  /orders/all   — admin: ดู orders ของทุก user (ต้องอยู่ก่อน /:id)
-router.get('/all',  requireAdmin, listAllOrders)
+// Admin only
+router.get('/all',              requireAdmin, listAllOrders)
+router.patch('/:id/status',     requireAdmin, patchStatus)
 
-// GET  /orders       — ดู orders ของ user ที่ login
-router.get('/',    listOrders)
+// User & Admin
+router.get('/:id/status',       getOrderStatusDetail)
+router.get('/:id/shipping',     getOrderShipping)
 
-// POST /orders       — สร้าง order ใหม่จาก cart
-router.post('/',   placeOrder)
-
-// GET  /orders/:id   — ดู order เดี่ยว (เฉพาะของตัวเอง)
-router.get('/:id', getOrder)
+// User
+router.get('/',                 listOrders)
+router.post('/',                placeOrder)
+router.get('/:id',              getOrder)
+router.patch('/:id/cancel',     cancelUserOrder)
+router.patch('/:id/shipping',   updateUserShipping)
 
 export default router
