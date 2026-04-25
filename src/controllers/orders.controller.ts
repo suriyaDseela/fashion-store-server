@@ -1,151 +1,68 @@
 import type { Response } from 'express'
 import { z } from 'zod'
-import {
-  getOrdersByUser, getAllOrders, getOrderById,
-  getOrderByIdAdmin, createOrder,
-  updateOrderStatus, cancelOrder,
-  updateShippingAddress, getOrderStatus, getShippingAddress,
-} from '../services/orders.service'
+import { getOrdersByUser, getAllOrders, getOrderById, createOrder } from '../services/orders.service'
 import { sendSuccess, sendError } from '../utils/response'
 import type { AuthRequest } from '../types'
 
 const createOrderSchema = z.object({
-  items: z.array(
-    z.object({
-      productId: z.string().uuid('Invalid product id'),
-      quantity:  z.number().int().min(1),
-    })
-  ).min(1, 'Order must contain at least one item'),
-  shippingAddress: z.string().min(10, 'Please enter a complete shipping address'),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid('Invalid product id'),
+        quantity:  z.number().int().min(1, 'Quantity must be at least 1'),
+      })
+    )
+    .min(1, 'Order must contain at least one item'),
 })
 
-const updateStatusSchema = z.object({
-  status: z.enum(['CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),
-})
-
-const updateShippingSchema = z.object({
-  shippingAddress: z.string().min(10, 'Please enter a complete shipping address'),
-})
-
-// GET /orders — user
+// ─── GET /orders (user — ของตัวเอง) ──────────────────────────
 export const listOrders = async (req: AuthRequest, res: Response) => {
   try {
-    return sendSuccess(res, await getOrdersByUser(req.user!.userId))
+    const result = await getOrdersByUser(req.user!.userId)
+    return sendSuccess(res, result)
   } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 500)
+    const message = err instanceof Error ? err.message : 'Failed to fetch orders'
+    return sendError(res, message, 500)
   }
 }
 
-// GET /orders/all — admin
+// ─── GET /orders/all (admin — ทุก user) ───────────────────────
 export const listAllOrders = async (req: AuthRequest, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100)
   const skip  = Number(req.query.skip) || 0
+
   try {
-    return sendSuccess(res, await getAllOrders(limit, skip))
+    const result = await getAllOrders(limit, skip)
+    return sendSuccess(res, result)
   } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 500)
+    const message = err instanceof Error ? err.message : 'Failed to fetch orders'
+    return sendError(res, message, 500)
   }
 }
 
-// GET /orders/:id — user (own) or admin
+// ─── GET /orders/:id ──────────────────────────────────────────
 export const getOrder = async (req: AuthRequest, res: Response) => {
   try {
-    const isAdmin = req.user!.role === 'ADMIN'
-    const result  = isAdmin
-      ? await getOrderByIdAdmin(String(req.params.id))
-      : await getOrderById(String(req.params.id), req.user!.userId)
+    const result = await getOrderById(String(req.params.id), req.user!.userId)
     return sendSuccess(res, result)
   } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Not found', 404)
+    const message = err instanceof Error ? err.message : 'Order not found'
+    return sendError(res, message, 404)
   }
 }
 
-// POST /orders — user
+// ─── POST /orders ─────────────────────────────────────────────
 export const placeOrder = async (req: AuthRequest, res: Response) => {
   const parsed = createOrderSchema.safeParse(req.body)
-  if (!parsed.success)
+  if (!parsed.success) {
     return sendError(res, parsed.error.errors[0].message, 422)
+  }
 
   try {
-    const result = await createOrder(
-      req.user!.userId,
-      parsed.data.items,
-      parsed.data.shippingAddress
-    )
+    const result = await createOrder(req.user!.userId, parsed.data.items)
     return sendSuccess(res, result, 201)
   } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 400)
-  }
-}
-
-// PATCH /orders/:id/status — admin
-export const patchStatus = async (req: AuthRequest, res: Response) => {
-  const parsed = updateStatusSchema.safeParse(req.body)
-  if (!parsed.success)
-    return sendError(res, parsed.error.errors[0].message, 422)
-
-  try {
-    const result = await updateOrderStatus(
-      String(req.params.id),
-      parsed.data.status
-    )
-    return sendSuccess(res, result)
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 400)
-  }
-}
-
-// PATCH /orders/:id/cancel — user (PENDING only)
-export const cancelUserOrder = async (req: AuthRequest, res: Response) => {
-  try {
-    const result = await cancelOrder(
-      String(req.params.id),
-      req.user!.userId
-    )
-    return sendSuccess(res, result)
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 400)
-  }
-}
-
-// PATCH /orders/:id/shipping — user
-export const updateUserShipping = async (req: AuthRequest, res: Response) => {
-  const parsed = updateShippingSchema.safeParse(req.body)
-  if (!parsed.success)
-    return sendError(res, parsed.error.errors[0].message, 422)
-
-  try {
-    const result = await updateShippingAddress(
-      String(req.params.id),
-      req.user!.userId,
-      parsed.data.shippingAddress
-    )
-    return sendSuccess(res, result)
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Failed', 400)
-  }
-}
-
-// GET /orders/:id/shipping — user (own) or admin
-export const getOrderShipping = async (req: AuthRequest, res: Response) => {
-  try {
-    const isAdmin = req.user!.role === 'ADMIN'
-    const userId  = isAdmin ? null : req.user!.userId
-    const result  = await getShippingAddress(String(req.params.id), userId)
-    return sendSuccess(res, result)
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Not found', 404)
-  }
-}
-
-// GET /orders/:id/status — user (own) or admin
-export const getOrderStatusDetail = async (req: AuthRequest, res: Response) => {
-  try {
-    const isAdmin = req.user!.role === 'ADMIN'
-    const userId  = isAdmin ? null : req.user!.userId
-    const result  = await getOrderStatus(String(req.params.id), userId)
-    return sendSuccess(res, result)
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : 'Not found', 404)
+    const message = err instanceof Error ? err.message : 'Failed to create order'
+    return sendError(res, message, 400)
   }
 }
