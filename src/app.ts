@@ -11,8 +11,24 @@ import { errorHandler } from './middlewares/error.middleware'
 const app  = express()
 const PORT = process.env.PORT ?? 3000
 
-// ─── Middleware ───────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL }))
+// ─── CORS ─────────────────────────────────────────────────
+// รองรับหลาย origins คั่นด้วย comma เช่น
+// FRONTEND_URL=http://localhost:5173,https://myapp.vercel.app
+const allowedOrigins = (process.env.FRONTEND_URL ?? '*')
+  .split(',')
+  .map((o) => o.trim())
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true,
+}))
+
 app.use(express.json())
 
 // ─── Routes ──────────────────────────────────────────────
@@ -26,7 +42,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', env: process.env.NODE_ENV })
 })
 
-// ─── Global error handler (ต้องอยู่ท้ายสุด) ──────────────
+// ─── Global error handler ─────────────────────────────────
 app.use(errorHandler)
 
 app.listen(PORT, () => {
