@@ -385,16 +385,28 @@ async function main() {
     },
   ]
 
-  // Create products
+  // Clear existing products
+  console.log('Clearing existing products...')
+  await prisma.product.deleteMany({})
+  
+  // Create products individually for better error handling
+  console.log(`Creating ${products.length} products...`)
+  let created = 0
   for (const p of products) {
-    await prisma.product.upsert({
-      where: { name: p.name },
-      update: p,
-      create: p,
-    }).catch(() => null)
+    try {
+      await prisma.product.create({
+        data: {
+          ...p,
+          isActive: true
+        }
+      })
+      created++
+    } catch (e) {
+      console.error(`Error creating ${p.name}:`, (e as Error).message)
+    }
   }
 
-  console.log(`✅ Seed complete — ${products.length} products, ${cats.length} categories`)
+  console.log(`✅ Seed complete — ${created} products created, ${cats.length} categories`)
 }
 
 main()
